@@ -3,7 +3,7 @@
 module multilevelAtoms
 import Base.^
 import Base.*
-using Plots
+#using Plots
 using LinearAlgebra
 #using DifferentialEquations
 
@@ -75,13 +75,21 @@ L461 = Laser(_461,1)
 Sr = Atom([_689,_707,_688,_679,_461 ])
 SrTriplets = Atom([_689,_707,_688,_679])
 
-#-------------------------------------
+#------------ Two level system -----------------------
+gstate = Level(0,0,0,"Ground")
+estate = Level(0,0,0,"Excited")
+ge = Transition(gstate,estate,1000.0,1.0e6)
+Lge = Laser(ge,1)
+TLA = Atom([ge])
+
+#------------ Rate equations -------------------------
 
 function rate(l::Laser)
 	s,d,y = l.saturation,l.detuning,l.line.linewidth
 	#return .5*s*y / (1+s+(2*d/y)^2)
 	#return (1/6)*s*y	# Not fully correct...
-	return sqrt(s/2)*y/(2*pi)
+	#return sqrt(s/2)*y/(2*pi)
+	return s*y
 end
 
 function rateMatrix(atom::Atom,lasers::Array{Laser,1})
@@ -105,23 +113,67 @@ function rateMatrix(atom::Atom,lasers::Array{Laser,1})
 	return gamma + pump - decay
 end
 
+function SSPop(atom::Atom,lasers::Array{Laser,1})
+	M = rateMatrix(atom,lasers)
+	E = eigen(M)
+	idx = findmax(E.values)[2]
+	v = E.vectors[:,idx]
+	v /= sum(v)
+	return v
+end
+
+function solveRateEq(atom::Atom,lasers::Array{Laser,1},init=nothing,times=[0.0:.01:10.0;])
+	M = rateMatrix(atom,lasers)
+	nstates = size(M)[1]
+	if !(init==nothing)
+		idx = atom.idx[init]
+	else 
+		idx = 1
+	end
+	x0 = zeros(nstates); x0[idx]=1;
+	E = eigen(M)
+	P = inv(E.vectors)
+	x = zeros(length(times),nstates)
+	
+	Tf = 1/(sort(E.values)[end-1])
+	times *= -Tf
+	
+	println(E.values)
+	for i in 1:length(times)
+		x[i,:] = E.vectors*diagm(0=>exp.(E.values*times[i]))*P*x0
+		#print(times[i])
+		#println(E.values*times[i])
+		#println(exp.(E.values*times[i]))
+	end
+	return x
+end
+
 function plotRepump(vals,lasers=[L689,L688,L679,L707])
 	N = length(vals)
 	ev = zeros(N,5)
 	for i=1:N
-		M = rateMatrix(SrTriplets,lasers*vals[i])
-		E = eigen(M)
-		mx = findmax(E.values)[2]
-		v = E.vectors[:,mx]
-		v /= sum(v)
-		ev[i,:] = v
+		ev[i,:] = SSPop(SrTriplets,lasers*vals[i])
 	end
 	#plot(ev)
 	return ev
 end
 
+#----------- Bloch equations -----------------------
+
+function vidx(n::int,idx::Tuple{Int64,Int64})
+	return idx[2]+
+end
+
+function midx
+	
+end
 
 function BlochEquations(atom,lasers,init)
+	
+	
+	
+	
+	
 	
 end
 
